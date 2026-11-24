@@ -1,0 +1,44 @@
+name: Build and Validate Docker Image
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  docker-build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Build Docker image
+        run: docker build -t house-price-app:test .
+
+      - name: Run Docker container
+        run: docker run -d --name house-price-test -p 8501:8501 house-price-app:test
+
+      - name: Validate application health
+        run: |
+          for attempt in {1..20}; do
+            if curl --fail --silent http://localhost:8501/_stcore/health; then
+              echo "Streamlit application is healthy."
+              exit 0
+            fi
+            sleep 3
+          done
+
+          echo "Health check failed. Container logs:"
+          docker logs house-price-test
+          exit 1
+
+      - name: Stop and remove test container
+        if: always()
+        run: docker rm --force house-price-test || true
